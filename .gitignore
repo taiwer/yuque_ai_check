@@ -205,3 +205,16 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# 测试视频
+测试视频/
+
+# results
+results/ 
+
+# chrome_user 开头的文件夹
+chrome_user_*/
+
+# .DS_Store
+.DS_Store
