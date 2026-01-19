@@ -118,11 +118,36 @@ def load_proxies():
                     GLOBAL_PROXIES = []
 
                 # 初始化缺失的字段
+                now = datetime.now()
                 for p in GLOBAL_PROXIES:
                     if "exhausted" not in p:
                         p["exhausted"] = False
                     if "count" not in p:
                         p["count"] = 0
+
+                    # 检查过期状态
+                    p["expired"] = False
+                    expire_time_str = p.get("expire_time", "")
+                    if expire_time_str:
+                        try:
+                            # 尝试解析 yyyy-MM-dd HH:mm:ss
+                            exp_dt = datetime.strptime(
+                                str(expire_time_str).strip(), "%Y-%m-%d %H:%M:%S"
+                            )
+                            if now > exp_dt:
+                                p["expired"] = True
+                        except ValueError:
+                            # 尝试无秒格式
+                            try:
+                                exp_dt = datetime.strptime(
+                                    str(expire_time_str).strip(), "%Y-%m-%d %H:%M"
+                                )
+                                if now > exp_dt:
+                                    p["expired"] = True
+                            except:
+                                pass
+                        except Exception:
+                            pass
 
                 print(f"已加载 {len(GLOBAL_PROXIES)} 个代理")
 
@@ -234,10 +259,14 @@ def check_proxy(proxy):
 
 
 def get_valid_proxy():
-    """从全局代理列表中获取一个可用的代理（排除已耗尽的）"""
+    """从全局代理列表中获取一个可用的代理（排除已耗尽且未过期的）"""
     with PROXY_LOCK:
-        # 筛选未耗尽的代理
-        available = [p for p in GLOBAL_PROXIES if not p.get("exhausted", False)]
+        # 筛选未耗尽且未过期的代理
+        available = [
+            p
+            for p in GLOBAL_PROXIES
+            if not p.get("exhausted", False) and not p.get("expired", False)
+        ]
 
     if not available:
         return False, None, None
@@ -631,17 +660,19 @@ class ProxyManagerApp:
         frame_top.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         # 定义列
-        columns = ("ip", "port", "status", "count")
+        columns = ("ip", "port", "expire_time", "status", "count")
         self.tree = ttk.Treeview(frame_top, columns=columns, show="headings")
         self.tree.heading("ip", text="IP")
         self.tree.heading("port", text="端口")
+        self.tree.heading("expire_time", text="过期时间")
         self.tree.heading("status", text="状态")
         self.tree.heading("count", text="使用次数")
 
         self.tree.column("ip", width=150)
-        self.tree.column("port", width=80)
-        self.tree.column("status", width=100)
-        self.tree.column("count", width=80)
+        self.tree.column("port", width=60)
+        self.tree.column("expire_time", width=140)
+        self.tree.column("status", width=80)
+        self.tree.column("count", width=60)
 
         # 滚动条
         scrollbar = ttk.Scrollbar(
@@ -729,14 +760,26 @@ class ProxyManagerApp:
                     ip_part, port_part = ip_raw, ""
 
                 exhausted = p.get("exhausted", False)
-                status = "耗尽" if exhausted else "正常"
+                expired = p.get("expired", False)
+                expire_time = p.get("expire_time", "")
+
+                if expired:
+                    status = "过期"
+                elif exhausted:
+                    status = "耗尽"
+                else:
+                    status = "正常"
+
                 count = p.get("count", 0)
 
                 # 插入树
                 # 存储 idx 在 tags 或 values 里方便后续查找
                 # 这里用 iid=idx
                 self.tree.insert(
-                    "", tk.END, iid=str(idx), values=(ip_part, port_part, status, count)
+                    "",
+                    tk.END,
+                    iid=str(idx),
+                    values=(ip_part, port_part, expire_time, status, count),
                 )
 
     def update_proxy_ui_safe(self):
@@ -755,10 +798,12 @@ class ProxyManagerApp:
 
         iid = selected[0]
         item = self.tree.item(iid)
-        # values: (ip, port, status, count)
-        current_ip_part = str(item["values"][0])
-        current_port_part = str(item["values"][1])
-        current_status_str = str(item["values"][2])
+        # values: (ip, port, expire_time, status, count)
+        vals = item["values"]
+        current_ip_part = str(vals[0])
+        current_port_part = str(vals[1])
+        current_expire_time = str(vals[2]) if str(vals[2]) != "None" else ""
+        current_status_str = str(vals[3])
 
         # 还原原始 full_ip 用以查找
         original_full_ip = current_ip_part
@@ -768,7 +813,7 @@ class ProxyManagerApp:
         # 创建编辑窗口
         dialog = tk.Toplevel(self.root)
         dialog.title("编辑代理")
-        dialog.geometry("300x300")
+        dialog.geometry("300x400")
 
         # Make modal
         dialog.transient(self.root)
@@ -785,17 +830,29 @@ class ProxyManagerApp:
         port_var = tk.StringVar(value=port_display)
         ttk.Entry(dialog, textvariable=port_var).pack(pady=5, padx=20, fill=tk.X)
 
+        # Expire Time
+        ttk.Label(dialog, text="过期时间 (YYYY-MM-DD HH:MM:SS):").pack(
+            pady=(10, 0), padx=20, anchor=tk.W
+        )
+        expire_var = tk.StringVar(value=current_expire_time)
+        ttk.Entry(dialog, textvariable=expire_var).pack(pady=5, padx=20, fill=tk.X)
+
         # Status
         ttk.Label(dialog, text="状态:").pack(pady=(10, 0), padx=20, anchor=tk.W)
+        # Handle "过期" status in combo
+        combo_vals = ["正常", "耗尽", "过期"]
+        if current_status_str not in combo_vals:
+            current_status_str = "正常"
         status_var = tk.StringVar(value=current_status_str)
         status_combo = ttk.Combobox(
-            dialog, textvariable=status_var, values=["正常", "耗尽"], state="readonly"
+            dialog, textvariable=status_var, values=combo_vals, state="readonly"
         )
         status_combo.pack(pady=5, padx=20, fill=tk.X)
 
         def save_edit():
             new_ip = ip_var.get().strip()
             new_port = port_var.get().strip()
+            new_expire = expire_var.get().strip()
             new_status_str = status_var.get()
 
             if not new_ip:
@@ -807,6 +864,20 @@ class ProxyManagerApp:
                 new_full_ip += f":{new_port}"
 
             new_exhausted = new_status_str == "耗尽"
+
+            if new_expire:
+                try:
+                    datetime.strptime(new_expire, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    try:
+                        datetime.strptime(new_expire, "%Y-%m-%d %H:%M")
+                    except ValueError:
+                        messagebox.showerror(
+                            "错误",
+                            "过期时间格式错误，应为 YYYY-MM-DD HH:MM:SS",
+                            parent=dialog,
+                        )
+                        return
 
             def _run_save():
                 try:
@@ -829,6 +900,27 @@ class ProxyManagerApp:
                                 if p["ip"] == original_full_ip:
                                     p["ip"] = new_full_ip
                                     p["exhausted"] = new_exhausted
+                                    p["expire_time"] = new_expire
+
+                                    # Update expired status immediately
+                                    p["expired"] = False
+                                    if new_expire:
+                                        try:
+                                            exp_dt = datetime.strptime(
+                                                new_expire, "%Y-%m-%d %H:%M:%S"
+                                            )
+                                            if datetime.now() > exp_dt:
+                                                p["expired"] = True
+                                        except:
+                                            try:
+                                                exp_dt = datetime.strptime(
+                                                    new_expire, "%Y-%m-%d %H:%M"
+                                                )
+                                                if datetime.now() > exp_dt:
+                                                    p["expired"] = True
+                                            except:
+                                                pass
+
                                     found = True
                                     should_save = True
                                     break
