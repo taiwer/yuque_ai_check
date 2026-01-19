@@ -660,18 +660,20 @@ class ProxyManagerApp:
         frame_top.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         # 定义列
-        columns = ("ip", "port", "expire_time", "status", "count")
+        columns = ("ip", "port", "expire_time", "status", "connectivity", "count")
         self.tree = ttk.Treeview(frame_top, columns=columns, show="headings")
         self.tree.heading("ip", text="IP")
         self.tree.heading("port", text="端口")
         self.tree.heading("expire_time", text="过期时间")
         self.tree.heading("status", text="状态")
+        self.tree.heading("connectivity", text="连通性")
         self.tree.heading("count", text="使用次数")
 
         self.tree.column("ip", width=150)
         self.tree.column("port", width=60)
         self.tree.column("expire_time", width=140)
         self.tree.column("status", width=80)
+        self.tree.column("connectivity", width=80)
         self.tree.column("count", width=60)
 
         # 滚动条
@@ -705,6 +707,9 @@ class ProxyManagerApp:
         ttk.Button(frame_mid, text="刷新列表", command=self.refresh_table).pack(
             side=tk.LEFT, padx=5
         )
+        ttk.Button(
+            frame_mid, text="检查联通性", command=self.check_all_connectivity
+        ).pack(side=tk.LEFT, padx=5)
 
         # 底部：日志与控制
         frame_bottom = ttk.LabelFrame(self.root, text="执行控制")
@@ -763,6 +768,8 @@ class ProxyManagerApp:
                 expired = p.get("expired", False)
                 expire_time = p.get("expire_time", "")
 
+                connectivity = p.get("connectivity", "未检查")
+
                 if expired:
                     status = "过期"
                 elif exhausted:
@@ -779,12 +786,44 @@ class ProxyManagerApp:
                     "",
                     tk.END,
                     iid=str(idx),
-                    values=(ip_part, port_part, expire_time, status, count),
+                    values=(
+                        ip_part,
+                        port_part,
+                        expire_time,
+                        status,
+                        connectivity,
+                        count,
+                    ),
                 )
 
     def update_proxy_ui_safe(self):
         """从线程安全调用刷新"""
         self.root.after(0, self.refresh_table)
+
+    def check_all_connectivity(self):
+        """检查所有代理的连通性"""
+
+        def _check_task():
+            self.log("开始检查所有代理连通性...")
+
+            with PROXY_LOCK:
+                proxies_to_check = list(GLOBAL_PROXIES)
+
+            total = len(proxies_to_check)
+            for idx, p in enumerate(proxies_to_check):
+                self.log(f"正在检查代理 ({idx + 1}/{total}): {p['ip']}")
+                try:
+                    is_valid, _ = check_proxy(p["ip"])
+                    with PROXY_LOCK:
+                        p["connectivity"] = "通" if is_valid else "不通"
+                except Exception as e:
+                    with PROXY_LOCK:
+                        p["connectivity"] = "错误"
+
+            self.log("所有代理检查完成")
+            self.update_proxy_ui_safe()
+
+        threading.Thread(target=_check_task, daemon=True).start()
 
     def edit_proxy(self):
         selected = self.tree.selection()
