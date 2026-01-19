@@ -437,7 +437,7 @@ def upload_file(page, file_path):
 
             # 等待 30 秒
             print("等待 30 秒后继续...防止上传过快")
-            time.sleep(30)
+            time.sleep(2 * 60)
 
         except Exception as e:
             print(f"上传或保存过程中出错: {e}")
