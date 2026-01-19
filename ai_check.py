@@ -401,6 +401,7 @@ def upload_file(page, file_path):
                     if match:
                         percent = float(match.group(1))
                         # print(f"当前上传进度: {percent}%")
+                        log(f"当前上传进度: {percent}%")
                         if percent >= 100.0:
                             print("上传已完成。")
                             break
@@ -423,6 +424,7 @@ def upload_file(page, file_path):
             found_result = False
 
             # 等待结果出现数字
+            log("等待检测结果生成...")
             while time.time() - start_time < 300:  # 最多等待5分钟
                 ai_score_ele = page.ele("text:嗅探到AI浓度")
                 ai_score_ele_text = ai_score_ele.parent(2).text if ai_score_ele else ""
@@ -459,13 +461,14 @@ def upload_file(page, file_path):
             with open(res_file, "w", encoding="utf-8") as f:
                 f.write(res)
 
-            print(f"检测结果已保存到 {res_file}")
+            log(f"检测结果已保存到 {res_file}")
 
             # 刷新页面准备下一次（虽然外层逻辑可能会重启）
             page.refresh()
 
-            # 等待 30 秒
-            print("等待 30 秒后继续...防止上传过快")
+            # 等待 120 秒
+            print("等待 120 秒后继续...防止上传过快")
+            log("等待 120 秒后继续...防止上传过快")
             time.sleep(2 * 60)
 
         except Exception as e:
