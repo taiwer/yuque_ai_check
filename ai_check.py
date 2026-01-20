@@ -366,7 +366,18 @@ def check_upload_status(log_text):
     return False
 
 
-def upload_file(page, file_path):
+def save_result(video_name, result_text):
+    # 结果存放
+    res_dir = "results"
+    if not os.path.exists(res_dir):
+        os.makedirs(res_dir)
+
+    res_file = os.path.join(res_dir, f"{video_name}.txt")
+    with open(res_file, "w", encoding="utf-8") as f:
+        f.write(result_text)
+
+
+def upload_file(page, file_path, log=print):
     """长传图片和保存结果"""
     print(f"准备上传文件: {file_path}")
 
@@ -385,6 +396,9 @@ def upload_file(page, file_path):
         print("已点击，等待路径自动填充...")
 
         try:
+            # 提取视频的名字作为文件名
+            video_name = os.path.basename(file_path).split(".")[0]
+
             # 启动控制台日志监听
             page.console.start()
 
@@ -401,7 +415,7 @@ def upload_file(page, file_path):
                     if match:
                         percent = float(match.group(1))
                         # print(f"当前上传进度: {percent}%")
-                        log(f"当前上传进度: {percent}%")
+                        print(f"当前上传进度: {percent}%")
                         if percent >= 100.0:
                             print("上传已完成。")
                             break
@@ -415,6 +429,7 @@ def upload_file(page, file_path):
 
             if not ai_score_ele:
                 print("等待结果超时！")
+                save_result(video_name, "等待结果超时！")
                 return
             else:
                 print("检测界面已生成。")
@@ -424,7 +439,7 @@ def upload_file(page, file_path):
             found_result = False
 
             # 等待结果出现数字
-            log("等待检测结果生成...")
+            print("等待检测结果生成...")
             while time.time() - start_time < 300:  # 最多等待5分钟
                 ai_score_ele = page.ele("text:嗅探到AI浓度")
                 ai_score_ele_text = ai_score_ele.parent(2).text if ai_score_ele else ""
@@ -443,32 +458,22 @@ def upload_file(page, file_path):
 
             if not found_result:
                 print("等待结果超时！")
+                save_result(video_name, "等待结果超时！")
                 return
 
             # 找 ai_score_ele 三级父元素
             ai_score_par_ele = ai_score_ele.parent(3)
             res = ai_score_par_ele.text
 
-            # 提取视频的名字作为文件名
-            video_name = os.path.basename(file_path).split(".")[0]
+            save_result(video_name, res)
 
-            # 结果存放
-            res_dir = "results"
-            if not os.path.exists(res_dir):
-                os.makedirs(res_dir)
-
-            res_file = os.path.join(res_dir, f"{video_name}.txt")
-            with open(res_file, "w", encoding="utf-8") as f:
-                f.write(res)
-
-            log(f"检测结果已保存到 {res_file}")
+            print(f"检测结果已保存到 results/{video_name}.txt")
 
             # 刷新页面准备下一次（虽然外层逻辑可能会重启）
             page.refresh()
 
             # 等待 120 秒
             print("等待 120 秒后继续...防止上传过快")
-            log("等待 120 秒后继续...防止上传过快")
             time.sleep(2 * 60)
 
         except Exception as e:
@@ -507,6 +512,7 @@ def setOptions(thread_id=None):
 
     co.set_argument("--disable-reading-from-canvas")
     co.set_argument("--disable-webrtc")
+    co.set_argument("--blink-settings=imagesEnabled=false")
 
     return co
 
@@ -613,7 +619,7 @@ def worker_task(thread_id, task_queue, url, app_log_func=None, update_proxy_ui=N
         # 执行任务
         try:
             log(f"开始处理: {os.path.basename(file_path)}")
-            upload_file(page, file_path)
+            upload_file(page, file_path, log=log)
             log(f"完成处理: {os.path.basename(file_path)}")
             if current_proxy_raw_ip:
                 increment_proxy_count(current_proxy_raw_ip)

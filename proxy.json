@@ -6,34 +6,160 @@
             "ip": "106.55.186.206:8388",
             "exhausted": false,
             "count": 3,
-            "expired": false
+            "expired": false,
+            "connectivity": "不通"
         },
         {
             "ip": "119.29.74.189:8388",
             "exhausted": false,
             "count": 0,
-            "expired": false
+            "expired": false,
+            "connectivity": "通"
         },
         {
             "ip": "106.52.52.27:8388",
-            "exhausted": false,
+            "exhausted": true,
             "count": 0,
-            "expired": false
+            "expired": false,
+            "connectivity": "通"
         },
         {
             "ip": "134.175.165.182:8388",
             "exhausted": false,
             "count": 0,
-            "expired": false
+            "expired": false,
+            "connectivity": "通"
         },
         {
             "ip": "81.71.84.194:8388",
             "exhausted": false,
             "count": 1,
-            "expired": false
+            "expired": false,
+            "connectivity": "通"
         },
         {
             "ip": "192.68.2.31:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false,
+            "connectivity": "不通"
+        },
+        {
+            "ip": "119.45.135.143:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "119.45.138.13:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "43.137.10.64:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "175.27.129.140:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "175.27.225.145:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "1.13.22.164:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "43.137.38.111:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "146.56.209.150:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "119.45.205.68:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "119.45.115.59:8388",
+            "exhausted": true,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "1.13.162.97:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "43.137.40.252:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "1.13.160.213:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "118.195.247.11:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "146.56.230.114:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "1.13.251.122:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "119.45.13.52:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "119.45.235.220:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "119.45.242.79:8388",
+            "exhausted": false,
+            "count": 0,
+            "expired": false
+        },
+        {
+            "ip": "146.56.192.65:8388",
             "exhausted": false,
             "count": 0,
             "expired": false
