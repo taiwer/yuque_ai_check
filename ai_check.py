@@ -319,13 +319,37 @@ def open_ai_check_page(browser, url=None):
 
         # 注入 Canvas 干扰脚本
         canvas_noise_js = """
-        const set_noise = (proto, name) => {
-            const old_func = proto[name];
-            proto[name] = function() {
-                const res = old_func.apply(this, arguments);
-                return res + (Math.random() > 0.5 ? " " : "");
+        (function() {
+            // 1. Canvas 噪声
+            const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+            CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
+                const image = originalGetImageData.apply(this, arguments);
+                // 随机改变最后两个像素的颜色值，肉眼不可见但破坏哈希
+                for (let i = 0; i < 2; i++) {
+                    const idx = Math.floor(Math.random() * image.data.length / 4) * 4;
+                    image.data[idx] = (image.data[idx] + Math.floor(Math.random() * 2) - 1 + 255) % 255; 
+                }
+                return image;
             };
-        };
+            
+            // 2. AudioContext 噪声 (音频指纹也是常见检测项)
+            const URL = window.URL || window.webkitURL;
+            if(window.AudioContext) {
+                 const originalCreateOscillator = window.AudioContext.prototype.createOscillator;
+                 window.AudioContext.prototype.createOscillator = function() {
+                      const oscillator = originalCreateOscillator.apply(this, arguments);
+                      const originalStart = oscillator.start;
+                      oscillator.start = function(when = 0) {
+                           // 极微小的频率偏移
+                           if (this.frequency) {
+                               this.frequency.value += Math.random() * 0.0001; 
+                           }
+                           return originalStart.apply(this, arguments);
+                      };
+                      return oscillator;
+                 }
+            }
+        })();
         """
         page.add_init_js(canvas_noise_js)
 
@@ -506,14 +530,15 @@ def setOptions(thread_id=None):
     co.set_cache_path(os.path.join(user_data_dir, "cache"))
 
     co.auto_port()  # 自动分配端口
+    ua_version = random.randint(120, 131)  # 随机 Chrome 版本
     co.set_user_agent(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+        f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ua_version}.0.0.0 Safari/537.36"
     )
 
     co.new_env()
     co.incognito()
 
-    co.set_argument("--disable-reading-from-canvas")
+    # co.set_argument("--disable-reading-from-canvas")
     co.set_argument("--disable-webrtc")
     # co.set_argument("--blink-settings=imagesEnabled=false")
 
