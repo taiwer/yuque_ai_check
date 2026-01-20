@@ -403,21 +403,21 @@ def save_result(video_name, result_text):
 
 def upload_file(page, file_path, log=print):
     """长传图片和保存结果"""
-    print(f"准备上传文件: {file_path}")
+    log(f"准备上传文件: {file_path}")
 
     # 设置监听上传
     page.set.upload_files(file_path)
 
     full_selector = "css:div.img-wrapper.show-gesture"
-    print(f"正在查找元素: {full_selector}")
+    log(f"正在查找元素: {full_selector}")
 
     target_ele = page.ele(full_selector, timeout=15)
 
     if target_ele:
-        print("找到元素，准备上传...")
+        log("找到元素，准备上传...")
         page.set.upload_files(file_path)
         target_ele.click()
-        print("已点击，等待路径自动填充...")
+        log("已点击，等待路径自动填充...")
 
         try:
             # 提取视频的名字作为文件名
@@ -427,24 +427,24 @@ def upload_file(page, file_path, log=print):
             page.console.start()
 
             page.wait.upload_paths_inputted()
-            print(f"上传路径{file_path}填入成功！")
+            log(f"上传路径{file_path}填入成功！")
 
             data = page.console.steps()
 
-            print("等待上传完成...")
-            for log in data:
-                log_text = log.text
+            log("等待上传完成...")
+            for console_log in data:
+                log_text = console_log.text
                 if "上传进度" in log_text:
                     match = re.search(r"(\d+(?:\.\d+)?)%", log_text)
                     if match:
                         percent = float(match.group(1))
-                        # print(f"当前上传进度: {percent}%")
-                        print(f"当前上传进度: {percent}%")
+                        # log(f"当前上传进度: {percent}%")
+                        log(f"当前上传进度: {percent}%")
                         if percent >= 100.0:
-                            print("上传已完成。")
+                            log("上传已完成。")
                             break
                 else:
-                    print(f"控制台日志: {log_text}")
+                    log(f"控制台日志: {log_text}")
                     pass
 
             time.sleep(10)
@@ -452,37 +452,37 @@ def upload_file(page, file_path, log=print):
             ai_score_ele = page.ele("text:嗅探到AI浓度", timeout=60)  # 嗅探到AI浓度元素
 
             if not ai_score_ele:
-                print("等待结果超时！")
-                save_result(video_name, "等待结果超时！")
+                log("等待结果超时！检测失败。")
+                save_result(video_name, "等待结果超时！检测失败。")
                 return
             else:
-                print("检测界面已生成。")
+                log("检测界面已生成。")
 
             # 循环等待服务器返回结果
             start_time = time.time()
             found_result = False
 
             # 等待结果出现数字
-            print("等待检测结果生成...")
+            log("等待检测结果生成...")
             while time.time() - start_time < 300:  # 最多等待5分钟
                 ai_score_ele = page.ele("text:嗅探到AI浓度")
                 ai_score_ele_text = ai_score_ele.parent(2).text if ai_score_ele else ""
 
-                print(f"当前检测结果文本: {ai_score_ele_text}")
+                log(f"当前检测结果文本: {ai_score_ele_text}")
 
                 # 正则检查里面是否有数字
-                print("检查结果中是否包含数字...")
+                log("检查结果中是否包含数字...")
                 if re.search(r"\d+", ai_score_ele_text):
                     found_result = True
-                    print("检测结果已生成。")
+                    log("检测结果已生成。")
                     break
 
                 # 延迟5秒后重试
                 time.sleep(5)
 
             if not found_result:
-                print("等待结果超时！")
-                save_result(video_name, "等待结果超时！")
+                log("等待结果超时! 检测失败。")
+                save_result(video_name, "等待结果超时！检测失败。")
                 return
 
             # 找 ai_score_ele 三级父元素
@@ -491,20 +491,25 @@ def upload_file(page, file_path, log=print):
 
             save_result(video_name, res)
 
-            print(f"检测结果已保存到 results/{video_name}.txt")
+            log(f"检测结果已保存到 results/{video_name}.txt")
 
             # 刷新页面准备下一次（虽然外层逻辑可能会重启）
             page.refresh()
 
-            # 等待 120 秒
-            print("等待 120 秒后继续...防止上传过快")
-            time.sleep(2 * 60)
+            # 等待 300 秒
+            wait_seconds = 300
+            log(f"等待 {wait_seconds} 秒后继续...防止上传过快")
+            for i in range(wait_seconds, 0, -1):
+                # 每10秒打印一次日志，最后5秒每秒打印
+                if i % 10 == 0 or i <= 5:
+                    log(f"倒计时: 还剩 {i} 秒")
+                time.sleep(1)
 
         except Exception as e:
-            print(f"上传或保存过程中出错: {e}")
+            log(f"上传或保存过程中出错: {e}")
             raise e
     else:
-        print("错误：未找到上传元素。")
+        log("错误：未找到上传元素。")
         raise Exception("Upload element not found")
 
 
