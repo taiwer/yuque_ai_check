@@ -495,7 +495,10 @@ def setOptions(thread_id=None):
     now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     user_data_dir = rf"chrome_user_data_{now_str}"
     if thread_id is not None:
-        user_data_dir = f"{user_data_dir}"
+        user_data_dir = f"{user_data_dir}_{thread_id}"
+
+    if not os.path.exists(user_data_dir):
+        os.makedirs(user_data_dir)
 
     co.set_user_data_path(user_data_dir)
 
