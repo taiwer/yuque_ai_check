@@ -512,7 +512,7 @@ def setOptions(thread_id=None):
 
     co.set_argument("--disable-reading-from-canvas")
     co.set_argument("--disable-webrtc")
-    co.set_argument("--blink-settings=imagesEnabled=false")
+    # co.set_argument("--blink-settings=imagesEnabled=false")
 
     return co
 
