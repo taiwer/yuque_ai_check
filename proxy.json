@@ -5,7 +5,7 @@
         {
             "ip": "119.45.193.29:8388",
             "exhausted": false,
-            "count": 0,
+            "count": 4,
             "expired": false
         },
         {
@@ -16,7 +16,7 @@
         },
         {
             "ip": "175.27.193.248:8388",
-            "exhausted": false,
+            "exhausted": true,
             "count": 0,
             "expired": false
         },
@@ -58,13 +58,13 @@
         },
         {
             "ip": "129.211.180.144:8388",
-            "exhausted": false,
+            "exhausted": true,
             "count": 0,
             "expired": false
         },
         {
             "ip": "175.27.223.103:8388",
-            "exhausted": false,
+            "exhausted": true,
             "count": 0,
             "expired": false
         },
@@ -77,13 +77,13 @@
         {
             "ip": "119.45.252.114:8388",
             "exhausted": false,
-            "count": 2,
+            "count": 4,
             "expired": false
         },
         {
             "ip": "1.13.157.17:8388",
-            "exhausted": false,
-            "count": 1,
+            "exhausted": true,
+            "count": 4,
             "expired": false
         },
         {
@@ -107,7 +107,7 @@
         {
             "ip": "118.195.207.92:8388",
             "exhausted": false,
-            "count": 0,
+            "count": 1,
             "expired": false
         },
         {

@@ -93,6 +93,99 @@ GLOBAL_PROXIES = []  # 列表结构 [{"ip": "...", "exhausted": False, "count": 
 # ----------------------------------------------------------------
 
 
+def init_page_div(page):
+    """更新界面元素"""
+    js_content = """
+(function() {
+  // 创建或获取悬浮框
+  let floatingDiv = document.getElementById('floating-counter');
+  
+  if (!floatingDiv) {
+    // 创建悬浮框
+    floatingDiv = document.createElement('div');
+    floatingDiv.id = 'floating-counter';
+    
+    // 设置样式
+    floatingDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      z-index: 9999;
+      cursor: move;
+      user-select: none;
+      min-width: 150px;
+      text-align: center;
+    `;
+    
+    // 添加到页面
+    document.body.appendChild(floatingDiv);
+    
+    // 添加拖动功能
+    let isDragging = false;
+    let offsetX, offsetY;
+    
+    floatingDiv.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      offsetX = e.clientX - floatingDiv.getBoundingClientRect().left;
+      offsetY = e.clientY - floatingDiv.getBoundingClientRect().top;
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      
+      floatingDiv.style.left = (e.clientX - offsetX) + 'px';
+      floatingDiv.style.top = (e.clientY - offsetY) + 'px';
+      floatingDiv.style.right = 'auto';
+    });
+    
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+  }
+  
+  // 设置默认文字为"更新中"
+  floatingDiv.innerHTML = '更新中';
+  
+  // 创建全局更新方法
+  window.updateCounter = function(text) {
+    if (!document.getElementById('floating-counter')) {
+      console.error('悬浮框不存在，请先创建');
+      return;
+    }
+    
+    // 更新文字内容
+    document.getElementById('floating-counter').innerHTML = text;
+    return text;
+  };
+  
+  // console.log('悬浮框已创建，默认显示: 更新中');
+  // console.log('使用 updateCounter("新文字") 更新内容');
+  
+})();
+    """
+    page.run_js(js_content)
+
+
+def update_div(text):
+    """更新悬浮框内容"""
+    js_update = f"""
+    if (window.updateCounter) {{
+        window.updateCounter("{text}");
+    }} else {{
+        console.error("悬浮框更新函数不存在");
+    }}
+    """
+    return js_update
+
+
 def load_proxies():
     """从文件加载代理"""
     global GLOBAL_PROXIES
@@ -269,7 +362,7 @@ def get_valid_proxy():
         ]
 
     if not available:
-        return False, None, None
+        return False, None, None, 0
 
     # 随机打乱
     local_available = list(available)
@@ -279,9 +372,9 @@ def get_valid_proxy():
         raw_ip = proxy_info["ip"]
         is_valid, proxy_with_scheme = check_proxy(raw_ip)
         if is_valid:
-            return True, proxy_with_scheme, raw_ip
+            return True, proxy_with_scheme, raw_ip, proxy_info.get("count", 0)
 
-    return False, None, None
+    return False, None, None, 0
 
 
 def get_count_from_page(page):
@@ -309,71 +402,119 @@ def get_count_from_page(page):
     return None
 
 
-def open_ai_check_page(browser, url=None):
+def open_ai_check_page(browser, url=None, inject_fp=False, log=print):
     """打开 AI 检测页面，并进行指纹注入和清理"""
     try:
         page = browser.latest_tab
 
-        # 访问页面
-        page.get(url)
+        # 设置加载模式为none
+        page.set.load_mode.none()
 
         # 注入 Canvas 干扰脚本
         canvas_noise_js = """
         (function() {
-            // 1. Canvas 噪声
-            const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
-            CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
-                const image = originalGetImageData.apply(this, arguments);
-                // 随机改变最后两个像素的颜色值，肉眼不可见但破坏哈希
-                for (let i = 0; i < 2; i++) {
-                    const idx = Math.floor(Math.random() * image.data.length / 4) * 4;
-                    image.data[idx] = (image.data[idx] + Math.floor(Math.random() * 2) - 1 + 255) % 255; 
-                }
-                return image;
-            };
+            try {
+                // [1] 隐藏 WebDriver 特征
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            } catch (e) {}
+
+            try {
+                // [2] Canvas 噪声 (加微小随机扰动)
+                const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+                CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
+                    const image = originalGetImageData.apply(this, arguments);
+                    for (let i = 0; i < 2; i++) {
+                        // 随机修改最后两个像素的色值，人眼无法察觉但破坏哈希
+                        const idx = Math.floor(Math.random() * image.data.length / 4) * 4;
+                        const change = Math.floor(Math.random() * 2) - 1; 
+                        image.data[idx] = (image.data[idx] + change + 255) % 255;
+                    }
+                    return image;
+                };
+            } catch (e) {}
             
-            // 2. AudioContext 噪声 (音频指纹也是常见检测项)
-            const URL = window.URL || window.webkitURL;
-            if(window.AudioContext) {
-                 const originalCreateOscillator = window.AudioContext.prototype.createOscillator;
-                 window.AudioContext.prototype.createOscillator = function() {
-                      const oscillator = originalCreateOscillator.apply(this, arguments);
-                      const originalStart = oscillator.start;
-                      oscillator.start = function(when = 0) {
-                           // 极微小的频率偏移
-                           if (this.frequency) {
-                               this.frequency.value += Math.random() * 0.0001; 
-                           }
-                           return originalStart.apply(this, arguments);
-                      };
-                      return oscillator;
-                 }
-            }
+            try {
+                // [3] AudioContext 噪声 (频率微调)
+                if(window.AudioContext || window.webkitAudioContext) {
+                     const AudioContext = window.AudioContext || window.webkitAudioContext;
+                     const originalCreateOscillator = AudioContext.prototype.createOscillator;
+                     AudioContext.prototype.createOscillator = function() {
+                          const oscillator = originalCreateOscillator.apply(this, arguments);
+                          const originalStart = oscillator.start;
+                          oscillator.start = function(when = 0) {
+                               if (this.frequency) {
+                                   this.frequency.value += (Math.random() * 0.01) - 0.005; 
+                               }
+                               return originalStart.apply(this, arguments);
+                          };
+                          return oscillator;
+                     }
+                }
+            } catch (e) {}
+
+            try {
+                // [4] WebGL 硬件指纹随机化 (显卡型号冒充)
+                const getParameter = WebGLRenderingContext.prototype.getParameter;
+                WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    // 37446: UNMASKED_RENDERER_WEBGL
+                    if (parameter === 37446) {
+                        const renderers = [
+                            'Intel(R) Iris(R) Plus Graphics 640', 
+                            'Intel(R) UHD Graphics 630',
+                            'AMD Radeon Pro 5300M',
+                            'Apple M1',
+                            'NVIDIA GeForce GTX 1050 Ti'
+                        ];
+                        // 基于时间戳的伪随机，保证同一次会话一致，但刷新后变化
+                        return renderers[Math.floor(Math.random() * renderers.length)];
+                    }
+                    return getParameter.apply(this, [parameter]);
+                };
+            } catch (e) {}
         })();
         """
-        page.add_init_js(canvas_noise_js)
 
-        # 清空 localStorage
-        page.add_init_js("localStorage.clear(); sessionStorage.clear();")
+        if inject_fp:
+            page.add_init_js(canvas_noise_js)
+            # 清空 localStorage
+            page.add_init_js("localStorage.clear(); sessionStorage.clear();")
 
-        # 访问页面
+        # # 访问页面
         page.get(url)
+
+        # 查找元素 如果包含 ”检测助手“ 就主动停止加载
+        stop_ele = page.ele("text:腾讯混元", timeout=10)
+        if stop_ele:
+            # 延迟5秒
+            log("检测到页面加载完成，延迟5秒后停止加载...")
+            print("检测到页面加载完成，延迟5秒后停止加载...")
+            time.sleep(5)
+            page.stop_loading()  # 停止加载
 
         # 查看指纹（可选）
         current_fp = page.run_js('return localStorage.getItem("fp");')
         print(f"当前指纹: {current_fp}")
 
+        # 初始化悬浮框
+        init_page_div(page)
+
         # 获取今日剩余次数
         remaining_count = get_count_from_page(page)
 
         if remaining_count is None:
+            log("未能获取今日剩余次数。")
             print("未能获取今日剩余次数。")
+            page.run_js(update_div("页面异常，检查失败"))
             return page, False, "error"
 
         if remaining_count <= 0:
+            log("今日次数已用完。")
             print("今日次数已用完。")
+            page.run_js(update_div("今日次数已用完"))
             return page, False, "exhausted"
 
+        log(f"今日次数剩余{remaining_count}，继续执行。")
+        page.run_js(update_div(f"今日剩余: {remaining_count} 次"))
         return page, True, "ok"
     except Exception as e:
         print(f"打开页面出错: {e}")
@@ -404,6 +545,7 @@ def save_result(video_name, result_text):
 def upload_file(page, file_path, log=print):
     """长传图片和保存结果"""
     log(f"准备上传文件: {file_path}")
+    page.run_js(update_div("准备上传文件"))
 
     # 设置监听上传
     page.set.upload_files(file_path)
@@ -415,8 +557,10 @@ def upload_file(page, file_path, log=print):
 
     if target_ele:
         log("找到元素，准备上传...")
+        page.run_js(update_div("找到元素，准备上传..."))
         page.set.upload_files(file_path)
         target_ele.click()
+        page.run_js(update_div("已点击，等待路径自动填充..."))
         log("已点击，等待路径自动填充...")
 
         try:
@@ -428,10 +572,12 @@ def upload_file(page, file_path, log=print):
 
             page.wait.upload_paths_inputted()
             log(f"上传路径{file_path}填入成功！")
+            page.run_js(update_div("上传路径填入成功，开始上传..."))
 
             data = page.console.steps()
 
             log("等待上传完成...")
+            page.run_js(update_div("等待上传完成..."))
             for console_log in data:
                 log_text = console_log.text
                 if "上传进度" in log_text:
@@ -440,8 +586,10 @@ def upload_file(page, file_path, log=print):
                         percent = float(match.group(1))
                         # log(f"当前上传进度: {percent}%")
                         log(f"当前上传进度: {percent}%")
+                        page.run_js(update_div(f"上传进度: {percent}%"))
                         if percent >= 100.0:
                             log("上传已完成。")
+                            page.run_js(update_div("上传已完成，等待检测结果..."))
                             break
                 else:
                     log(f"控制台日志: {log_text}")
@@ -494,15 +642,17 @@ def upload_file(page, file_path, log=print):
             log(f"检测结果已保存到 results/{video_name}.txt")
 
             # 刷新页面准备下一次（虽然外层逻辑可能会重启）
-            page.refresh()
+            # page.refresh()
 
             # 等待 300 秒
             wait_seconds = 300
             log(f"等待 {wait_seconds} 秒后继续...防止上传过快")
+            page.run_js(update_div(f"等待 {wait_seconds} 秒后继续..."))
             for i in range(wait_seconds, 0, -1):
                 # 每10秒打印一次日志，最后5秒每秒打印
                 if i % 10 == 0 or i <= 5:
                     log(f"倒计时: 还剩 {i} 秒")
+                    page.run_js(update_div(f"倒计时: 还剩 {i} 秒"))
                 time.sleep(1)
 
         except Exception as e:
@@ -585,6 +735,9 @@ def worker_task(thread_id, task_queue, url, app_log_func=None, update_proxy_ui=N
             log("获取任务超时(Empty)，退出...")
             break
 
+        # 是否需要注入，如果重新启动了浏览器，才注入
+        inject_fp = False
+
         # 确保浏览器可用且有次数
         retry_browser_count = 0
         while retry_browser_count < 5:
@@ -592,12 +745,16 @@ def worker_task(thread_id, task_queue, url, app_log_func=None, update_proxy_ui=N
                 log("浏览器未初始化，正在初始化...")
                 # 初始化浏览器
                 co = setOptions(thread_id)
+                inject_fp = True
 
                 if USE_PROXY:
                     log("正在获取可用代理...")
-                    is_valid, ip_proxy_scheme, raw_ip = get_valid_proxy()
+                    is_valid, ip_proxy_scheme, raw_ip, p_count = get_valid_proxy()
                     if is_valid:
+                        # 将代理的使用次数同步给 retry_browser_count
+                        retry_browser_count = p_count
                         log(f"获取代理成功: {raw_ip}")
+
                         co.set_proxy(ip_proxy_scheme)
                         current_proxy_raw_ip = raw_ip
                     else:
@@ -619,7 +776,12 @@ def worker_task(thread_id, task_queue, url, app_log_func=None, update_proxy_ui=N
 
             # 检查次数
             log(f"正在打开检测页面: {url}")
-            page, has_count, reason = open_ai_check_page(browser, url)
+            if not inject_fp:
+                print("浏览器已存在，跳过指纹注入")
+                log("浏览器已存在，跳过指纹注入")
+            page, has_count, reason = open_ai_check_page(
+                browser, url, inject_fp=inject_fp, log=log
+            )
 
             if not has_count:
                 log(f"检测到无次数或页面错误({reason})，关闭浏览器重试...")
@@ -654,6 +816,8 @@ def worker_task(thread_id, task_queue, url, app_log_func=None, update_proxy_ui=N
             log(f"开始处理: {os.path.basename(file_path)}")
             upload_file(page, file_path, log=log)
             log(f"完成处理: {os.path.basename(file_path)}")
+
+            # 任务完成，增加代理使用次数
             if current_proxy_raw_ip:
                 increment_proxy_count(current_proxy_raw_ip)
                 if update_proxy_ui:
